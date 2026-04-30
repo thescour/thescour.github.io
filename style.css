@@ -1,0 +1,21 @@
+html,body{
+    margin:0;
+    background:black;
+    height:100%;
+    overflow:hidden;
+}
+
+#viewer{
+width:100vw;
+height:100vh;
+display:flex;
+align-items:center;
+justify-content:center;
+overflow:hidden;
+}
+
+img{
+    will-change: transform;
+    user-select:none;
+    touch-action:none;
+}

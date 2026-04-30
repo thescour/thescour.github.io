@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>photos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="viewer">
+  <img id="photo" src="photos/1.jpg">
+</div>
+
+<script>
+const images = [
+"photos/1.jpg",
+"photos/2.jpg",
+"photos/3.jpg",
+"photos/4.jpg",
+"photos/5.jpg",
+"photos/6.jpg",
+"photos/7.jpg",
+"photos/8.jpg",
+"photos/9.jpg",
+"photos/10.jpg",
+"photos/11.jpg",
+"photos/12.jpg",
+"photos/13.jpg",
+"photos/14.jpg",
+"photos/15.jpg",
+"photos/16.jpg",
+"photos/17.jpg",
+"photos/18.jpg",
+"photos/19.jpg",
+"photos/20.jpg",
+"photos/21.jpg",
+"photos/22.jpg",
+"photos/23.jpg",
+"photos/24.jpg"
+];
+
+let index = 0;
+const photo = document.getElementById("photo");
+
+function show(i){
+  index = (i + images.length) % images.length;
+  photo.src = images[index];
+  resetPosition();
+}
+
+document.addEventListener("keydown", e=>{
+  if(e.key==="ArrowRight") show(index+1);
+  if(e.key==="ArrowLeft") show(index-1);
+});
+
+photo.addEventListener("dblclick", ()=>show(index+1));
+
+/* --- PAN SYSTEM --- */
+
+let scale = 2;
+let x = 0;
+let y = 0;
+
+function update(){
+  photo.style.transform =
+    `translate(${x}px, ${y}px) scale(${scale})`;
+}
+
+function resetPosition(){
+  x = 0;
+  y = 0;
+  update();
+}
+
+/* mouse drag */
+let dragging = false;
+let startX, startY;
+
+document.addEventListener("mousedown", e=>{
+  dragging = true;
+  startX = e.clientX - x;
+  startY = e.clientY - y;
+});
+
+document.addEventListener("mousemove", e=>{
+  if(!dragging) return;
+  x = e.clientX - startX;
+  y = e.clientY - startY;
+  update();
+});
+
+document.addEventListener("mouseup", ()=>dragging=false);
+
+/* touch drag */
+document.addEventListener("touchstart", e=>{
+  startX = e.touches[0].clientX - x;
+  startY = e.touches[0].clientY - y;
+});
+
+document.addEventListener("touchmove", e=>{
+  x = e.touches[0].clientX - startX;
+  y = e.touches[0].clientY - startY;
+  update();
+});
+
+/* subtle drift */
+function drift(){
+  let dx = (Math.random() - 0.5) * 40;
+  let dy = (Math.random() - 0.5) * 40;
+  x += dx;
+  y += dy;
+  update();
+}
+
+setInterval(drift, 2000);
+
+update();
+</script>
+
+</body>
+</html>
