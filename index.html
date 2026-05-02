@@ -22,9 +22,13 @@ for (let i = 1; i <= 24; i++) {
 let index = 0;
 const photo = document.getElementById("photo");
 
-/* scale rule */
+/* custom scale groups */
+const scale12 = [1, 4, 7, 10, 16, 19, 20, 21]; // zero-based index
+
 function getScale(i){
-  return (i === 0) ? 1 : 1.4;
+  if(i === 0) return 1;           // first image
+  if(scale12.includes(i)) return 1.2;
+  return 1.4;
 }
 
 let scale = getScale(index);
@@ -49,7 +53,6 @@ photo.addEventListener("dblclick", ()=>show(index+1));
 /* transform */
 function update(){
   if(index === 0){
-    // restore original "fit screen" behavior
     photo.style.transform = "none";
     photo.style.maxWidth = "100%";
     photo.style.maxHeight = "100%";
@@ -102,7 +105,7 @@ document.addEventListener("touchmove", e=>{
   update();
 });
 
-/* drift only for zoomed images */
+/* drift */
 function drift(){
   if(index === 0) return;
 
