@@ -49,10 +49,16 @@ photo.addEventListener("dblclick", ()=>show(index+1));
 /* transform */
 function update(){
   if(index === 0){
-    photo.style.transform = "none"; // no zoom/pan on first image
+    // restore original "fit screen" behavior
+    photo.style.transform = "none";
+    photo.style.maxWidth = "100%";
+    photo.style.maxHeight = "100%";
+    photo.style.objectFit = "contain";
   } else {
     photo.style.transform =
       `translate(${x}px, ${y}px) scale(${scale})`;
+    photo.style.maxWidth = "none";
+    photo.style.maxHeight = "none";
   }
 }
 
