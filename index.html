@@ -14,39 +14,27 @@
 </div>
 
 <script>
-const images = [
-"photos/1.jpg",
-"photos/2.jpg",
-"photos/3.jpg",
-"photos/4.jpg",
-"photos/5.jpg",
-"photos/6.jpg",
-"photos/7.jpg",
-"photos/8.jpg",
-"photos/9.jpg",
-"photos/10.jpg",
-"photos/11.jpg",
-"photos/12.jpg",
-"photos/13.jpg",
-"photos/14.jpg",
-"photos/15.jpg",
-"photos/16.jpg",
-"photos/17.jpg",
-"photos/18.jpg",
-"photos/19.jpg",
-"photos/20.jpg",
-"photos/21.jpg",
-"photos/22.jpg",
-"photos/23.jpg",
-"photos/24.jpg"
-];
+const images = [];
+for (let i = 1; i <= 24; i++) {
+  images.push(`photos/${i}.jpg`);
+}
 
 let index = 0;
 const photo = document.getElementById("photo");
 
+/* SCALE RULE */
+function getScale(i){
+  return (i === 0) ? 1 : 1.5;
+}
+
+let scale = getScale(index);
+let x = 0;
+let y = 0;
+
 function show(i){
   index = (i + images.length) % images.length;
   photo.src = images[index];
+  scale = getScale(index);
   resetPosition();
 }
 
@@ -57,12 +45,7 @@ document.addEventListener("keydown", e=>{
 
 photo.addEventListener("dblclick", ()=>show(index+1));
 
-/* --- PAN SYSTEM --- */
-
-let scale = 2;
-let x = 0;
-let y = 0;
-
+/* PAN */
 function update(){
   photo.style.transform =
     `translate(${x}px, ${y}px) scale(${scale})`;
@@ -74,7 +57,7 @@ function resetPosition(){
   update();
 }
 
-/* mouse drag */
+/* mouse */
 let dragging = false;
 let startX, startY;
 
@@ -93,7 +76,7 @@ document.addEventListener("mousemove", e=>{
 
 document.addEventListener("mouseup", ()=>dragging=false);
 
-/* touch drag */
+/* touch */
 document.addEventListener("touchstart", e=>{
   startX = e.touches[0].clientX - x;
   startY = e.touches[0].clientY - y;
@@ -105,10 +88,11 @@ document.addEventListener("touchmove", e=>{
   update();
 });
 
-/* subtle drift */
+/* drift */
 function drift(){
-  let dx = (Math.random() - 0.5) * 40;
-  let dy = (Math.random() - 0.5) * 40;
+  let intensity = (index === 0) ? 10 : 40;
+  let dx = (Math.random() - 0.5) * intensity;
+  let dy = (Math.random() - 0.5) * intensity;
   x += dx;
   y += dy;
   update();
