@@ -22,13 +22,21 @@ for (let i = 1; i <= 24; i++) {
 let index = 0;
 const photo = document.getElementById("photo");
 
-/* custom scale groups */
-const scale12 = [1, 4, 7, 10, 16, 19, 20, 21]; // zero-based index
+/* groups */
+const scale12 = [1,4,7,10,16,19,20,21]; // images 2,5,8,11,17,20,21,22 (0-based)
 
+/* scale */
 function getScale(i){
-  if(i === 0) return 1;           // first image
+  if(i === 0) return 1;
   if(scale12.includes(i)) return 1.2;
   return 1.4;
+}
+
+/* drift intensity */
+function getDrift(i){
+  if(i === 0) return 0;
+  if(scale12.includes(i)) return 20;  // slower, calmer
+  return 50;                          // more active
 }
 
 let scale = getScale(index);
@@ -107,10 +115,11 @@ document.addEventListener("touchmove", e=>{
 
 /* drift */
 function drift(){
-  if(index === 0) return;
+  let intensity = getDrift(index);
+  if(intensity === 0) return;
 
-  let dx = (Math.random() - 0.5) * 40;
-  let dy = (Math.random() - 0.5) * 40;
+  let dx = (Math.random() - 0.5) * intensity;
+  let dy = (Math.random() - 0.5) * intensity;
   x += dx;
   y += dy;
   update();
