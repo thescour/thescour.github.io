@@ -23,7 +23,7 @@ let index = 0;
 const photo = document.getElementById("photo");
 
 /* groups */
-const scale12 = [1,4,7,10,16,19,20,21]; // images 2,5,8,11,17,20,21,22 (0-based)
+const scale12 = [1,4,7,10,16,19,20,21];
 
 /* scale */
 function getScale(i){
@@ -32,44 +32,74 @@ function getScale(i){
   return 1.4;
 }
 
-/* drift intensity */
+/* drift */
 function getDrift(i){
   if(i === 0) return 0;
-  if(scale12.includes(i)) return 20;  // slower, calmer
-  return 50;                          // more active
+  if(scale12.includes(i)) return 20;
+  return 50;
 }
 
 let scale = getScale(index);
+
 let x = 0;
 let y = 0;
 
+let imgWidth = 0;
+let imgHeight = 0;
+
 function show(i){
   index = (i + images.length) % images.length;
+
+  photo.onload = () => {
+    scale = getScale(index);
+
+    imgWidth = photo.naturalWidth * scale;
+    imgHeight = photo.naturalHeight * scale;
+
+    resetPosition();
+  };
+
   photo.src = images[index];
-  scale = getScale(index);
-  resetPosition();
 }
 
-/* navigation */
-document.addEventListener("keydown", e=>{
-  if(e.key==="ArrowRight") show(index+1);
-  if(e.key==="ArrowLeft") show(index-1);
-});
+/* clamp movement so no black edges */
+function clampPosition(){
 
-photo.addEventListener("dblclick", ()=>show(index+1));
-
-/* transform */
-function update(){
   if(index === 0){
+    x = 0;
+    y = 0;
+    return;
+  }
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  const maxX = Math.max(0, (imgWidth - vw) / 2);
+  const maxY = Math.max(0, (imgHeight - vh) / 2);
+
+  x = Math.min(maxX, Math.max(-maxX, x));
+  y = Math.min(maxY, Math.max(-maxY, y));
+}
+
+/* render */
+function update(){
+
+  if(index === 0){
+
     photo.style.transform = "none";
     photo.style.maxWidth = "100%";
     photo.style.maxHeight = "100%";
     photo.style.objectFit = "contain";
+
   } else {
-    photo.style.transform =
-      `translate(${x}px, ${y}px) scale(${scale})`;
+
+    clampPosition();
+
     photo.style.maxWidth = "none";
     photo.style.maxHeight = "none";
+
+    photo.style.transform =
+      `translate(${x}px, ${y}px) scale(${scale})`;
   }
 }
 
@@ -79,55 +109,132 @@ function resetPosition(){
   update();
 }
 
+/* keyboard */
+document.addEventListener("keydown", e=>{
+  if(e.key === "ArrowRight") show(index + 1);
+  if(e.key === "ArrowLeft") show(index - 1);
+});
+
+/* single tap / click next image */
+photo.addEventListener("click", ()=>{
+
+  /* allow normal behaviour on first image */
+  if(index === 0){
+    show(index + 1);
+    return;
+  }
+
+  /* don't trigger next image after drag */
+  if(moved){
+    moved = false;
+    return;
+  }
+
+  show(index + 1);
+});
+
 /* mouse drag */
 let dragging = false;
+let moved = false;
+
 let startX, startY;
 
 document.addEventListener("mousedown", e=>{
+
   if(index === 0) return;
+
   dragging = true;
+  moved = false;
+
   startX = e.clientX - x;
   startY = e.clientY - y;
 });
 
 document.addEventListener("mousemove", e=>{
+
   if(!dragging) return;
+
+  moved = true;
+
   x = e.clientX - startX;
   y = e.clientY - startY;
+
   update();
 });
 
-document.addEventListener("mouseup", ()=>dragging=false);
+document.addEventListener("mouseup", ()=>{
+  dragging = false;
+});
 
-/* touch drag */
+/* touch */
+
+let touchStartX = 0;
+let touchStartY = 0;
+
 document.addEventListener("touchstart", e=>{
+
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+
   if(index === 0) return;
-  startX = e.touches[0].clientX - x;
-  startY = e.touches[0].clientY - y;
+
+  startX = touchStartX - x;
+  startY = touchStartY - y;
 });
 
 document.addEventListener("touchmove", e=>{
+
   if(index === 0) return;
-  x = e.touches[0].clientX - startX;
-  y = e.touches[0].clientY - startY;
+
+  const currentX = e.touches[0].clientX;
+  const currentY = e.touches[0].clientY;
+
+  const dx = currentX - touchStartX;
+  const dy = currentY - touchStartY;
+
+  /* swipe image change */
+  if(Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy)){
+
+    if(dx < 0){
+      show(index + 1);
+    } else {
+      show(index - 1);
+    }
+
+    touchStartX = currentX;
+    touchStartY = currentY;
+
+    return;
+  }
+
+  /* pan */
+  x = currentX - startX;
+  y = currentY - startY;
+
   update();
-});
+
+}, { passive:true });
 
 /* drift */
 function drift(){
-  let intensity = getDrift(index);
+
+  const intensity = getDrift(index);
+
   if(intensity === 0) return;
 
-  let dx = (Math.random() - 0.5) * intensity;
-  let dy = (Math.random() - 0.5) * intensity;
-  x += dx;
-  y += dy;
+  x += (Math.random() - 0.5) * intensity;
+  y += (Math.random() - 0.5) * intensity;
+
   update();
 }
 
 setInterval(drift, 2000);
 
-update();
+/* init */
+show(0);
+
+window.addEventListener("resize", update);
+
 </script>
 
 </body>
