@@ -25,8 +25,12 @@ html, body {
 img {
   user-select: none;
   -webkit-user-drag: none;
-  touch-action: none;
+  cursor: grab;
   will-change: transform;
+}
+
+img:active {
+  cursor: grabbing;
 }
 </style>
 </head>
@@ -49,7 +53,7 @@ const photo = document.getElementById("photo");
 /* scale groups */
 const scale12 = [1,4,7,10,16,19,20,21];
 
-function getBaseScale(i){
+function getScale(i){
   if(i === 0) return 1;
   if(scale12.includes(i)) return 1.2;
   return 1.4;
@@ -60,15 +64,19 @@ let x = 0, y = 0;
 let vx = 0, vy = 0;
 
 let scale = 1;
-let targetScale = 1;
 
-/* image load */
+let imgWidth = 0;
+let imgHeight = 0;
+
+/* load image */
 function show(i){
   index = (i + images.length) % images.length;
 
   photo.onload = () => {
-    targetScale = getBaseScale(index);
-    scale = targetScale;
+    scale = getScale(index);
+
+    imgWidth = photo.naturalWidth * scale;
+    imgHeight = photo.naturalHeight * scale;
 
     x = 0;
     y = 0;
@@ -79,6 +87,18 @@ function show(i){
   };
 
   photo.src = images[index];
+}
+
+/* clamp to prevent black space */
+function clamp(){
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  const maxX = Math.max(0, (imgWidth - vw) / 2);
+  const maxY = Math.max(0, (imgHeight - vh) / 2);
+
+  x = Math.min(maxX, Math.max(-maxX, x));
+  y = Math.min(maxY, Math.max(-maxY, y));
 }
 
 /* render */
@@ -98,9 +118,8 @@ function update(){
     `translate(${x}px, ${y}px) scale(${scale})`;
 }
 
-/* animation loop */
+/* animation loop (momentum) */
 function animate(){
-  /* inertia */
   x += vx;
   y += vy;
 
@@ -110,21 +129,20 @@ function animate(){
   if(Math.abs(vx) < 0.01) vx = 0;
   if(Math.abs(vy) < 0.01) vy = 0;
 
-  /* spring back scale */
-  scale += (targetScale - scale) * 0.08;
-
+  clamp();
   update();
+
   requestAnimationFrame(animate);
 }
 requestAnimationFrame(animate);
 
-/* keyboard */
+/* keyboard navigation */
 document.addEventListener("keydown", e=>{
   if(e.key === "ArrowRight") show(index + 1);
   if(e.key === "ArrowLeft") show(index - 1);
 });
 
-/* click next */
+/* click = next image */
 photo.addEventListener("click", ()=>{
   show(index + 1);
 });
@@ -161,48 +179,29 @@ document.addEventListener("mouseup", ()=>{
   dragging = false;
 });
 
-/* touch drag + pinch */
+/* touch drag */
 let tStartX = 0, tStartY = 0;
 let lastTX = 0, lastTY = 0;
-
-let pinchStart = null;
-
-function pinchDist(t){
-  const dx = t[0].clientX - t[1].clientX;
-  const dy = t[0].clientY - t[1].clientY;
-  return Math.sqrt(dx*dx + dy*dy);
-}
 
 document.addEventListener("touchstart", e=>{
   if(index === 0) return;
 
-  if(e.touches.length === 2){
-    pinchStart = pinchDist(e.touches);
-    return;
-  }
+  const t = e.touches[0];
 
-  tStartX = e.touches[0].clientX - x;
-  tStartY = e.touches[0].clientY - y;
+  tStartX = t.clientX - x;
+  tStartY = t.clientY - y;
 
-  lastTX = e.touches[0].clientX;
-  lastTY = e.touches[0].clientY;
+  lastTX = t.clientX;
+  lastTY = t.clientY;
 });
 
 document.addEventListener("touchmove", e=>{
   if(index === 0) return;
 
-  /* pinch zoom */
-  if(e.touches.length === 2 && pinchStart){
-    const newDist = pinchDist(e.touches);
-    const zoom = newDist / pinchStart;
+  const t = e.touches[0];
 
-    targetScale = getBaseScale(index) * Math.max(0.6, Math.min(1.6, zoom));
-    return;
-  }
-
-  /* pan */
-  const tx = e.touches[0].clientX;
-  const ty = e.touches[0].clientY;
+  const tx = t.clientX;
+  const ty = t.clientY;
 
   x = tx - tStartX;
   y = ty - tStartY;
@@ -215,12 +214,7 @@ document.addEventListener("touchmove", e=>{
 
 }, { passive:true });
 
-document.addEventListener("touchend", ()=>{
-  pinchStart = null;
-  targetScale = getBaseScale(index);
-});
-
-/* start */
+/* init */
 show(0);
 </script>
 
