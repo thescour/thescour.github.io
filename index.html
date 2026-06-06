@@ -4,7 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>photos</title>
-<link rel="stylesheet" href="style.css">
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  height: 100%;
+}
+
+#viewer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+img {
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+  will-change: transform;
+}
+</style>
 </head>
 
 <body>
@@ -22,92 +46,77 @@ for (let i = 1; i <= 24; i++) {
 let index = 0;
 const photo = document.getElementById("photo");
 
-/* groups */
+/* scale groups */
 const scale12 = [1,4,7,10,16,19,20,21];
 
-/* scale */
-function getScale(i){
+function getBaseScale(i){
   if(i === 0) return 1;
   if(scale12.includes(i)) return 1.2;
   return 1.4;
 }
 
-/* drift */
-function getDrift(i){
-  if(i === 0) return 0;
-  if(scale12.includes(i)) return 20;
-  return 50;
-}
+/* state */
+let x = 0, y = 0;
+let vx = 0, vy = 0;
 
-let scale = getScale(index);
+let scale = 1;
+let targetScale = 1;
 
-let x = 0;
-let y = 0;
-
-let imgWidth = 0;
-let imgHeight = 0;
-
+/* image load */
 function show(i){
   index = (i + images.length) % images.length;
 
   photo.onload = () => {
-    scale = getScale(index);
+    targetScale = getBaseScale(index);
+    scale = targetScale;
 
-    imgWidth = photo.naturalWidth * scale;
-    imgHeight = photo.naturalHeight * scale;
+    x = 0;
+    y = 0;
+    vx = 0;
+    vy = 0;
 
-    resetPosition();
+    update();
   };
 
   photo.src = images[index];
 }
 
-/* clamp movement so no black edges */
-function clampPosition(){
-
-  if(index === 0){
-    x = 0;
-    y = 0;
-    return;
-  }
-
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-
-  const maxX = Math.max(0, (imgWidth - vw) / 2);
-  const maxY = Math.max(0, (imgHeight - vh) / 2);
-
-  x = Math.min(maxX, Math.max(-maxX, x));
-  y = Math.min(maxY, Math.max(-maxY, y));
-}
-
 /* render */
 function update(){
-
   if(index === 0){
-
     photo.style.transform = "none";
     photo.style.maxWidth = "100%";
     photo.style.maxHeight = "100%";
     photo.style.objectFit = "contain";
-
-  } else {
-
-    clampPosition();
-
-    photo.style.maxWidth = "none";
-    photo.style.maxHeight = "none";
-
-    photo.style.transform =
-      `translate(${x}px, ${y}px) scale(${scale})`;
+    return;
   }
+
+  photo.style.maxWidth = "none";
+  photo.style.maxHeight = "none";
+
+  photo.style.transform =
+    `translate(${x}px, ${y}px) scale(${scale})`;
 }
 
-function resetPosition(){
-  x = 0;
-  y = 0;
+/* animation loop */
+function animate(){
+  /* inertia */
+  x += vx;
+  y += vy;
+
+  vx *= 0.92;
+  vy *= 0.92;
+
+  if(Math.abs(vx) < 0.01) vx = 0;
+  if(Math.abs(vy) < 0.01) vy = 0;
+
+  /* spring back scale */
+  scale += (targetScale - scale) * 0.08;
+
   update();
+  requestAnimationFrame(animate);
 }
+requestAnimationFrame(animate);
 
 /* keyboard */
 document.addEventListener("keydown", e=>{
@@ -115,126 +124,104 @@ document.addEventListener("keydown", e=>{
   if(e.key === "ArrowLeft") show(index - 1);
 });
 
-/* single tap / click next image */
+/* click next */
 photo.addEventListener("click", ()=>{
-
-  /* allow normal behaviour on first image */
-  if(index === 0){
-    show(index + 1);
-    return;
-  }
-
-  /* don't trigger next image after drag */
-  if(moved){
-    moved = false;
-    return;
-  }
-
   show(index + 1);
 });
 
 /* mouse drag */
 let dragging = false;
-let moved = false;
-
-let startX, startY;
+let startX = 0, startY = 0;
 
 document.addEventListener("mousedown", e=>{
-
   if(index === 0) return;
 
   dragging = true;
-  moved = false;
-
   startX = e.clientX - x;
   startY = e.clientY - y;
+
+  vx = 0;
+  vy = 0;
 });
 
 document.addEventListener("mousemove", e=>{
-
   if(!dragging) return;
 
-  moved = true;
+  const nx = e.clientX - startX;
+  const ny = e.clientY - startY;
 
-  x = e.clientX - startX;
-  y = e.clientY - startY;
+  vx = nx - x;
+  vy = ny - y;
 
-  update();
+  x = nx;
+  y = ny;
 });
 
 document.addEventListener("mouseup", ()=>{
   dragging = false;
 });
 
-/* touch */
+/* touch drag + pinch */
+let tStartX = 0, tStartY = 0;
+let lastTX = 0, lastTY = 0;
 
-let touchStartX = 0;
-let touchStartY = 0;
+let pinchStart = null;
+
+function pinchDist(t){
+  const dx = t[0].clientX - t[1].clientX;
+  const dy = t[0].clientY - t[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
 
 document.addEventListener("touchstart", e=>{
-
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
-
   if(index === 0) return;
 
-  startX = touchStartX - x;
-  startY = touchStartY - y;
+  if(e.touches.length === 2){
+    pinchStart = pinchDist(e.touches);
+    return;
+  }
+
+  tStartX = e.touches[0].clientX - x;
+  tStartY = e.touches[0].clientY - y;
+
+  lastTX = e.touches[0].clientX;
+  lastTY = e.touches[0].clientY;
 });
 
 document.addEventListener("touchmove", e=>{
-
   if(index === 0) return;
 
-  const currentX = e.touches[0].clientX;
-  const currentY = e.touches[0].clientY;
+  /* pinch zoom */
+  if(e.touches.length === 2 && pinchStart){
+    const newDist = pinchDist(e.touches);
+    const zoom = newDist / pinchStart;
 
-  const dx = currentX - touchStartX;
-  const dy = currentY - touchStartY;
-
-  /* swipe image change */
-  if(Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy)){
-
-    if(dx < 0){
-      show(index + 1);
-    } else {
-      show(index - 1);
-    }
-
-    touchStartX = currentX;
-    touchStartY = currentY;
-
+    targetScale = getBaseScale(index) * Math.max(0.6, Math.min(1.6, zoom));
     return;
   }
 
   /* pan */
-  x = currentX - startX;
-  y = currentY - startY;
+  const tx = e.touches[0].clientX;
+  const ty = e.touches[0].clientY;
 
-  update();
+  x = tx - tStartX;
+  y = ty - tStartY;
+
+  vx = tx - lastTX;
+  vy = ty - lastTY;
+
+  lastTX = tx;
+  lastTY = ty;
 
 }, { passive:true });
 
-/* drift */
-function drift(){
+document.addEventListener("touchend", ()=>{
+  pinchStart = null;
+  targetScale = getBaseScale(index);
+});
 
-  const intensity = getDrift(index);
-
-  if(intensity === 0) return;
-
-  x += (Math.random() - 0.5) * intensity;
-  y += (Math.random() - 0.5) * intensity;
-
-  update();
-}
-
-setInterval(drift, 2000);
-
-/* init */
+/* start */
 show(0);
-
-window.addEventListener("resize", update);
-
 </script>
 
 </body>
