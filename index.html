@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>photos</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    height: 100%;
+}
+
+#viewer {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+img {
+    user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+    cursor: grab;
+    will-change: transform;
+}
+
+img:active {
+    cursor: grabbing;
+}
+</style>
+</head>
+
+<body>
+
+<div id="viewer">
+    <img id="photo" src="photos/1.jpg">
+</div>
+
+
+<script>
+
+const images = [];
+
+for(let i = 1; i <= 32; i++){
+    images.push(`photos/${i}.jpg`);
+}
+
+
+let index = 0;
+
+const photo = document.getElementById("photo");
+
+
+/* 1.2x images */
+const scale12 = [
+    1,4,7,10,16,19,20,21
+];
+
+
+function getScale(i){
+
+    if(i === 0) return 1;
+
+    if(scale12.includes(i))
+        return 1.2;
+
+    return 1.4;
+}
+
+
+
+/* movement */
+let x = 0;
+let y = 0;
+
+let vx = 0;
+let vy = 0;
+
+
+let scale = 1;
+
+let imgWidth = 0;
+let imgHeight = 0;
+
+
+
+function show(i){
+
+    index = (i + images.length) % images.length;
+
+
+    photo.onload = ()=>{
+
+        scale = getScale(index);
+
+
+        imgWidth =
+            photo.naturalWidth * scale;
+
+        imgHeight =
+            photo.naturalHeight * scale;
+
+
+        x = 0;
+        y = 0;
+
+
+        /*
+        Initial "someone touched it" flick
+        */
+        if(index !== 0){
+
+            const horizontal =
+                Math.random() > 0.25;
+
+
+            if(horizontal){
+
+                vx =
+                (Math.random() > 0.5 ? 1 : -1)
+                *
+                (2 + Math.random()*2);
+
+                vy =
+                (Math.random()-0.5)
+                * 1.5;
+
+            }
+            else{
+
+                vx =
+                (Math.random()-0.5)
+                * 2;
+
+                vy =
+                (Math.random() > 0.5 ? 1 : -1)
+                *
+                (2 + Math.random()*2);
+
+            }
+
+        }
+        else{
+
+            vx = 0;
+            vy = 0;
+
+        }
+
+
+        update();
+
+    };
+
+
+    photo.src = images[index];
+
+}
+
+
+
+
+/*
+ Prevent black edges
+*/
+function clamp(){
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+
+    const maxX =
+        Math.max(0,(imgWidth-vw)/2);
+
+
+    const maxY =
+        Math.max(0,(imgHeight-vh)/2);
+
+
+
+    x =
+    Math.min(
+        maxX,
+        Math.max(-maxX,x)
+    );
+
+
+    y =
+    Math.min(
+        maxY,
+        Math.max(-maxY,y)
+    );
+
+}
+
+
+
+/*
+ Render
+*/
+function update(){
+
+
+    if(index === 0){
+
+        photo.style.transform = "none";
+
+        photo.style.maxWidth = "100%";
+        photo.style.maxHeight = "100%";
+
+        photo.style.objectFit = "contain";
+
+        return;
+
+    }
+
+
+    photo.style.maxWidth = "none";
+    photo.style.maxHeight = "none";
+
+
+    photo.style.transform =
+    `translate(${x}px,${y}px) scale(${scale})`;
+
+}
+
+
+
+
+
+/*
+ Physics loop
+*/
+function animate(){
+
+
+    x += vx;
+    y += vy;
+
+
+
+    vx *= 0.92;
+    vy *= 0.92;
+
+
+
+    if(Math.abs(vx)<0.01)
+        vx=0;
+
+
+    if(Math.abs(vy)<0.01)
+        vy=0;
+
+
+
+    clamp();
+
+
+    update();
+
+
+    requestAnimationFrame(animate);
+
+}
+
+
+requestAnimationFrame(animate);
+
+
+
+
+
+/*
+ Keyboard
+*/
+document.addEventListener("keydown",e=>{
+
+    if(e.key==="ArrowRight")
+        show(index+1);
+
+
+    if(e.key==="ArrowLeft")
+        show(index-1);
+
+});
+
+
+
+
+
+/*
+ Click next
+*/
+photo.addEventListener("click",()=>{
+
+    show(index+1);
+
+});
+
+
+
+
+
+/*
+ Mouse drag
+*/
+
+let dragging=false;
+
+let startX=0;
+let startY=0;
+
+
+
+document.addEventListener("mousedown",e=>{
+
+
+    if(index===0)
+        return;
+
+
+    dragging=true;
+
+
+    startX=e.clientX-x;
+    startY=e.clientY-y;
+
+
+    vx=0;
+    vy=0;
+
+
+});
+
+
+
+
+document.addEventListener("mousemove",e=>{
+
+
+    if(!dragging)
+        return;
+
+
+    let nx=e.clientX-startX;
+    let ny=e.clientY-startY;
+
+
+
+    vx=nx-x;
+    vy=ny-y;
+
+
+    x=nx;
+    y=ny;
+
+
+});
+
+
+
+
+document.addEventListener("mouseup",()=>{
+
+    dragging=false;
+
+});
+
+
+
+
+
+
+
+/*
+ Touch drag
+*/
+
+let tStartX=0;
+let tStartY=0;
+
+let lastTX=0;
+let lastTY=0;
+
+
+
+document.addEventListener("touchstart",e=>{
+
+    if(e.touches.length!==1){
+        e.preventDefault();
+        return;
+    }
+
+
+
+    if(index===0)
+        return;
+
+
+    let t=e.touches[0];
+
+
+    tStartX=t.clientX-x;
+    tStartY=t.clientY-y;
+
+
+    lastTX=t.clientX;
+    lastTY=t.clientY;
+
+
+});
+
+
+
+
+document.addEventListener("touchmove",e=>{
+
+    if(e.touches.length!==1){
+        e.preventDefault();
+        return;
+    }
+
+    e.preventDefault();
+
+
+
+    if(index===0)
+        return;
+
+
+    let t=e.touches[0];
+
+
+    let tx=t.clientX;
+    let ty=t.clientY;
+
+
+
+    x=tx-tStartX;
+    y=ty-tStartY;
+
+
+
+    vx=tx-lastTX;
+    vy=ty-lastTY;
+
+
+
+    lastTX=tx;
+    lastTY=ty;
+
+
+
+},{passive:true});
+
+
+
+
+
+/*
+ Start
+*/
+show(0);
+
+
+</script>
+
+</body>
+</html>
