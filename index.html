@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>photos</title>
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    height: 100%;
+    overscroll-behavior: none;
+}
+#viewer {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+img {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+    cursor: grab;
+    will-change: transform;
+    transform-origin: center center;
+    -webkit-tap-highlight-color: transparent;
+}
+img:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+<div id="viewer">
+    <img id="photo" src="photos/1.jpg" alt="" draggable="false">
+</div>
+<script>
+const TOTAL = 33;
+const images = [];
+for (let i = 1; i <= TOTAL; i++) images.push(`photos/${i}.jpg`);
+
+let index = 0;
+const photo = document.getElementById("photo");
+const viewer = document.getElementById("viewer");
+
+/* base zoom: 1.jpg fits, rest locked zoomed-in */
+const scale12 = [1,4,7,10,16,19,20,21];
+function getScale(i) {
+    if (i === 0) return 1;
+    if (scale12.includes(i)) return 1.2;
+    return 1.4;
+}
+
+let baseScale = 1;
+let scale = 1;
+let x = 0, y = 0;
+let vx = 0, vy = 0;
+
+let dragging = false;
+let pinching = false;
+let snapping = false;
+let snapId = 0;
+
+/* ---- display ---- */
+function clamp() {
+    if (index === 0) return;
+    const nw = photo.naturalWidth || 1;
+    const nh = photo.naturalHeight || 1;
+    const dw = nw * scale;
+    const dh = nh * scale;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxX = Math.max(0, (dw - vw) / 2);
+    const maxY = Math.max(0, (dh - vh) / 2);
+    if (x > maxX) x = maxX; else if (x < -maxX) x = -maxX;
+    if (y > maxY) y = maxY; else if (y < -maxY) y = -maxY;
+}
+
+function update() {
+    if (index === 0) {
+        photo.style.transform = "none";
+        photo.style.maxWidth = "100%";
+        photo.style.maxHeight = "100%";
+        photo.style.objectFit = "contain";
+        return;
+    }
+    photo.style.maxWidth = "none";
+    photo.style.maxHeight = "none";
+    photo.style.transform = `translate3d(${x}px,${y}px,0) scale(${scale})`;
+}
+
+/* ---- loading without flicker: swap only when next is ready ---- */
+let loadToken = 0;
+function show(i) {
+    const next = (i + images.length) % images.length;
+    const token = ++loadToken;
+    const url = images[next];
+    const pre = new Image();
+    pre.onload = () => {
+        if (token !== loadToken) return;
+        index = next;
+        // cancel gestures
+        dragging = false; pinching = false; pointers.clear();
+        snapId++; snapping = false;
+
+        photo.src = url;
+        baseScale = getScale(index);
+        scale = baseScale;
+        x = 0; y = 0; vx = 0; vy = 0;
+
+        if (index === 0) { update(); }
+        else {
+            update();
+            // "someone touched it" drift — hints Google-Maps panning
+            const horizontal = Math.random() > 0.25;
+            if (horizontal) {
+                vx = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 2);
+                vy = (Math.random() - 0.5) * 1.5;
+            } else {
+                vx = (Math.random() - 0.5) * 2;
+                vy = (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 2);
+            }
+        }
+        // preload the one after, for instant taps
+        const after = images[(index + 1) % images.length];
+        const p2 = new Image(); p2.src = after;
+    };
+    pre.onerror = () => { /* keep current photo if missing */ };
+    pre.src = url;
+}
+function next() { show(index + 1); }
+
+/* ---- physics loop (drift + inertia) ---- */
+function animate() {
+    if (!dragging && !pinching && !snapping && index !== 0) {
+        x += vx; y += vy;
+        vx *= 0.92; vy *= 0.92;
+        if (Math.abs(vx) < 0.01) vx = 0;
+        if (Math.abs(vy) < 0.01) vy = 0;
+        clamp();
+        update();
+    }
+    requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+/* ---- snap back to locked zoom after pinch ---- */
+function snapBack() {
+    if (index === 0) return;
+    const id = ++snapId;
+    const s0 = scale, x0 = x, y0 = y;
+    if (Math.abs(s0 - baseScale) < 0.001) { scale = baseScale; clamp(); update(); return; }
+    // target pan clamped for base scale
+    const nw = photo.naturalWidth || 1, nh = photo.naturalHeight || 1;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const maxX = Math.max(0, (nw * baseScale - vw) / 2);
+    const maxY = Math.max(0, (nh * baseScale - vh) / 2);
+    const x1 = Math.min(maxX, Math.max(-maxX, x0));
+    const y1 = Math.min(maxY, Math.max(-maxY, y0));
+    snapping = true;
+    const t0 = performance.now(), dur = 180;
+    (function step(t) {
+        if (id !== snapId) return;
+        let k = (t - t0) / dur;
+        if (k >= 1) k = 1;
+        const e = 1 - Math.pow(1 - k, 3); // easeOutCubic, no bounce = no flicker
+        scale = s0 + (baseScale - s0) * e;
+        x = x0 + (x1 - x0) * e;
+        y = y0 + (y1 - y0) * e;
+        clamp(); update();
+        if (k < 1) requestAnimationFrame(step);
+        else { snapping = false; scale = baseScale; x = x1; y = y1; clamp(); update(); }
+    })(t0);
+}
+
+/* ---- unified pointer gestures: tap + swipe-left = next, drag = pan, 2-finger = temp zoom ---- */
+const pointers = new Map();
+let downX = 0, downY = 0, lastX = 0, lastY = 0, downTime = 0, moved = 0;
+let tapCandidate = false;
+let pinchD0 = 0, pinchS0 = 1, pinchMidX0 = 0, pinchMidY0 = 0, pinchX0 = 0, pinchY0 = 0;
+
+function dist2(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+photo.addEventListener("pointerdown", e => {
+    photo.setPointerCapture && photo.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    snapId++; snapping = false; // interrupt snap
+    if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinching = true; dragging = false; tapCandidate = false;
+        pinchD0 = Math.max(1, dist2(a, b));
+        pinchS0 = scale;
+        pinchMidX0 = (a.x + b.x) / 2; pinchMidY0 = (a.y + b.y) / 2;
+        pinchX0 = x; pinchY0 = y;
+        vx = 0; vy = 0;
+    } else if (pointers.size === 1) {
+        downX = lastX = e.clientX; downY = lastY = e.clientY;
+        downTime = performance.now(); moved = 0;
+        tapCandidate = true;
+        if (index !== 0) { dragging = true; vx = 0; vy = 0; }
+    }
+});
+
+photo.addEventListener("pointermove", e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinching && pointers.size >= 2) {
+        const [a, b] = [...pointers.values()];
+        const d = Math.max(1, dist2(a, b));
+        // temporary zoom, locked range so it can't get lost or flicky
+        let s = pinchS0 * (d / pinchD0);
+        const lo = baseScale * 0.55, hi = baseScale * 2.8;
+        if (s < lo) s = lo; else if (s > hi) s = hi;
+        scale = s;
+        const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+        x = pinchX0 + (midX - pinchMidX0);
+        y = pinchY0 + (midY - pinchMidY0);
+        moved = 999; // definitely not a tap
+        clamp(); update();
+        return;
+    }
+    if (dragging && pointers.size === 1) {
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        lastX = e.clientX; lastY = e.clientY;
+        moved += Math.abs(dx) + Math.abs(dy);
+        if (moved > 10) tapCandidate = false;
+        x += dx; y += dy;
+        // smoothed velocity for inertia, capped so release isn't wild
+        vx = vx * 0.7 + dx * 0.3;
+        vy = vy * 0.7 + dy * 0.3;
+        if (vx > 30) vx = 30; else if (vx < -30) vx = -30;
+        if (vy > 30) vy = 30; else if (vy < -30) vy = -30;
+        clamp(); update();
+    }
+});
+
+function endPointer(e) {
+    const wasPinch = pinching;
+    pointers.delete(e.pointerId);
+    if (wasPinch) {
+        if (pointers.size >= 2) return; // still pinching
+        pinching = false;
+        if (pointers.size === 1) {
+            // one finger left: keep zoom, resume pan from there
+            const [p] = [...pointers.values()];
+            lastX = p.x; lastY = p.y;
+            if (index !== 0) dragging = true;
+            tapCandidate = false;
+            return;
+        }
+        snapBack(); // all fingers up -> return to locked zoom
+        return;
+    }
+    if (pointers.size !== 0) return;
+    dragging = false;
+    const dt = performance.now() - downTime;
+    const dx = e.clientX - downX, dy = e.clientY - downY;
+    if (tapCandidate && moved < 12 && dt < 500) { next(); return; } // tap
+    // swipe-left flick = next. anything else = just pan/inertia. no backwards, ever.
+    if (dx < -80 && dt < 600 && Math.abs(dx) > 2 * Math.abs(dy) && vx < -0.4) { next(); return; }
+    // otherwise inertia continues in animate(); clamp velocity
+    if (Math.abs(vx) > 30) vx = Math.sign(vx) * 30;
+    if (Math.abs(vy) > 30) vy = Math.sign(vy) * 30;
+}
+photo.addEventListener("pointerup", endPointer);
+photo.addEventListener("pointercancel", endPointer);
+
+/* ---- no-backwards controls ---- */
+document.addEventListener("keydown", e => {
+    if (["ArrowRight"," ","Enter"].includes(e.key)) next();
+    else if (e.key === "ArrowLeft") next(); // mischievous: forward only
+});
+photo.addEventListener("dragstart", e => e.preventDefault());
+photo.addEventListener("dblclick", e => e.preventDefault());
+document.addEventListener("contextmenu", e => { if (e.target === photo) e.preventDefault(); });
+window.addEventListener("resize", () => { clamp(); update(); });
+
+show(0);
+</script>
+</body>
+</html>
